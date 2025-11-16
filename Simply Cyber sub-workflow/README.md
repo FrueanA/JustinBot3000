@@ -1,0 +1,2 @@
+Allows students to prompt the bot and get a short, summarized response of the day's cybersecurity news. Students prompt the bot on Discord with the command !cybernews \[date], this workflow automatically formats the date, pulls the date's corresponding video from YouTube channel Simply Cyber, then pulls the video's transcript and summarizes to ten bullet points, and returns the condensed summary to the student through Discord.
+

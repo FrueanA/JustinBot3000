@@ -1,0 +1,787 @@
+{
+  "name": "Simply Cyber",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cybernews",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "REDACTED",
+      "name": "Discord Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2176,
+        -64
+      ],
+      "webhookResponse": true,
+      "webhookId": "REDACTED"
+    },
+    {
+      "parameters": {
+        "functionCode": "//get query\nlet input = $json.body?.content || \"\";\n\ninput = input.replace(\"!cybernews\", \"\").trim().toLowerCase();\nconst now = new Date();\n\n// Normalize input\ninput = input.trim().toLowerCase();\n\n// Handle natural language\nif (input === \"today\") {\n  input = `${now.getMonth() + 1}/${now.getDate()}`;\n} else if (input === \"yesterday\") {\n  const yesterday = new Date();\n  yesterday.setDate(now.getDate() - 1);\n  input = `${yesterday.getMonth() + 1}/${yesterday.getDate()}`;\n} else {\n  // Try parsing \"June 12\", \"Jun 12\", etc.\n  const dateParsed = new Date(input);\n  if (!isNaN(dateParsed.getTime())) {\n    input = `${dateParsed.getMonth() + 1}/${dateParsed.getDate()}`;\n  } else {\n    // Replace non-slash separators\n    input = input.replace(/[-.]/g, \"/\");\n  }\n}\n\n// Final format check!\nif (!/\\d{1,2}\\/\\d{1,2}/.test(input)) {\n  throw new Error(\"Invalid date format. Use MM/DD or say 'today'/'yesterday'\");\n}\n\nconst [month, day] = input.split(\"/\").map(n => parseInt(n));\nconst date = new Date();\ndate.setMonth(month - 1);\ndate.setDate(day);\n\n// Format to MON DATE for title match <3\nconst options = { month: \"short\", day: \"numeric\" };\nconst dateText = date.toLocaleDateString(\"en-US\", options).replace(\".\", \"\");\n\nreturn [{ json: { requestedDate: dateText } }];\n"
+      },
+      "id": "REDACTED",
+      "name": "Extract Date",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1904,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.youtube.com/playlist?list=REDACTED",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "REDACTED",
+      "name": "Scrape Playlist Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -1744,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.data;\nconst requestedDate = $items(\"Extract Date\")[0].json.requestedDate;\n\nconst regex = /\"title\":\\{\"runs\":\\[\\{\"text\":\"([^\"]+)\"\\}\\],\"accessibility\".*?\"videoId\":\"(.*?)\"/g;\nlet match;\nlet closestMatch = null;\n\nwhile ((match = regex.exec(html)) !== null) {\n  const title = match[1];\n  const videoId = match[2];\n\n  if (title.includes(requestedDate)) {\n    closestMatch = {\n      title,\n      videoId,\n      url: `https://www.youtube.com/watch?v=${videoId}`\n    };\n    break;\n  }\n}\n\nif (!closestMatch) {\n  return [{ json: { error: `No video found for ${requestedDate}. It may not be published yet.` } }];\n}\n\nreturn [{ json: closestMatch }];"
+      },
+      "id": "REDACTED",
+      "name": "Extract Video Links by Date",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"error\"]}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "REDACTED",
+      "name": "Check for Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1376,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        64
+      ],
+      "id": "REDACTED",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -848,
+        224
+      ],
+      "id": "REDACTED",
+      "name": "OpenAI Chat Model",
+      "credentials": "REDACTED"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "REDACTED",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -528,
+        64
+      ],
+      "id": "REDACTED",
+      "name": "Check AI Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const date = $json.requestedDate || \"today\";\nconst transcript = $json.chatInput;\n\nif (!transcript) {\n  throw new Error(\"Transcript not provided.\");\n}\n\nreturn `\nYou are a cybersecurity expert summarizer.\n\nSummarize the following transcript into 5 to 10 key bullet points. Focus only on the major news headlines or security insights. Be concise and avoid filler.\n\nStart the summary with:\n\"Here is the cyber news summary for ${date}:\"\n\nTranscript:\n${transcript}\n`;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.2,
+      "position": [
+        -656,
+        224
+      ],
+      "id": "REDACTED",
+      "name": "Summarize"
+    },
+    {
+      "parameters": {
+        "url": "https://youtube-transcript3.p.REDACTED",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "videoId",
+              "value": "={{ $json.videoId }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-REDACTED",
+              "value": "youtube-transcript3.p.REDACTED"
+            },
+            {
+              "name": "x-REDACTED",
+              "value": "REDACTED"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "REDACTED",
+      "name": "extractTranscript",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -1184,
+        64
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $json.channel_id }}/messages\n\n",
+        "authentication": "REDACTED",
+        "nodeCredentialType": "discordBotApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($json.output)}},\n  \"message_reference\": {\n    \"message_id\": \"{{ $json.message_id }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        -240
+      ],
+      "id": "REDACTED",
+      "name": "HTTP Request7",
+      "credentials": "REDACTED"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "REDACTED",
+              "name": "message_id",
+              "value": "={{ $json.body.message_reference.message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "REDACTED",
+              "name": "channel_id",
+              "value": "={{ $json.body.message_reference.channel_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1456,
+        432
+      ],
+      "id": "REDACTED",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -288,
+        224
+      ],
+      "id": "REDACTED",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"message\": \"\u26a0\ufe0f Something went wrong summarizing the news :(\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -128,
+        224
+      ],
+      "id": "REDACTED",
+      "name": "Error Message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $json.channel_id }}/messages",
+        "authentication": "REDACTED",
+        "nodeCredentialType": "discordBotApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Could not verify the authenticity of this message. Recalibrating my sensors, please refine your question or try again soon\",\n  \"message_reference\": {\n    \"message_id\": \"{{ $json.body.message_reference.message_id }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        32,
+        224
+      ],
+      "id": "REDACTED",
+      "name": "HTTP Request",
+      "credentials": "REDACTED"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "REDACTED",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        -80
+      ],
+      "id": "REDACTED",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        64,
+        -240
+      ],
+      "id": "REDACTED",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "content",
+              "value": "=\n{{ $json.output }}\n\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "REDACTED",
+      "name": "Respond to Discord",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/{{ $json.channel_id }}/messages\n\n",
+        "authentication": "REDACTED",
+        "nodeCredentialType": "discordBotApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Could not find a video for the given data. You may have input the date incorrectly, or a video for the given date may simply (cyber) not exist.\",\n  \"message_reference\": {\n    \"message_id\": \"{{ $json.message_id }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1024,
+        -160
+      ],
+      "id": "REDACTED",
+      "name": "HTTP Request1",
+      "credentials": "REDACTED"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1184,
+        -160
+      ],
+      "id": "REDACTED",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "functionCode": "const transcript = $json.transcript;\n\nif (!Array.isArray(transcript) || transcript.length === 0) {\n  throw new Error(\"No transcript found.\");\n}\n\nconst totalEntries = transcript.length;\n\n//this is the portion of the transcript that gets forwarded to GPT\nconst start = Math.floor(totalEntries * 0.10); \nconst end = Math.floor(totalEntries * 0.40);\n\nconst trimmedText = transcript.slice(start, end).map(entry => entry.text).join(\" \").trim();\n\nreturn [{\n  json: {\n    chatInput: trimmedText,\n    videoUrl: $json.url\n  }\n}];\n"
+      },
+      "id": "REDACTED",
+      "name": "Shorten Transcript",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "REDACTED",
+        "sheetName": {
+          "__rl": true,
+          "value": 333479674,
+          "mode": "list",
+          "cachedResultName": "cybernews",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REDACTED/edit#gid=333479674"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_name": "={{ $json.mentions[0].username }}",
+            "user_id": "={{ $json.mentions[0].id }}",
+            "ai_response": "={{ $json.content }}",
+            "user_message": "={{ $json.referenced_message.content }}",
+            "timestamp": "={{ $json.referenced_message.timestamp }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_name",
+              "displayName": "user_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_message",
+              "displayName": "user_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        560,
+        64
+      ],
+      "id": "REDACTED",
+      "name": "Append row in sheet",
+      "credentials": "REDACTED"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check for Error": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "extractTranscript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Date": {
+      "main": [
+        [
+          {
+            "node": "Scrape Playlist Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Date",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Playlist Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Video Links by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video Links by Date": {
+      "main": [
+        [
+          {
+            "node": "Check for Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Check AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check AI Output": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extractTranscript": {
+      "main": [
+        [
+          {
+            "node": "Shorten Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Message": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Discord": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request7": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shorten Transcript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "REDACTED",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "REDACTED"
+  },
+  "id": "eA7jpN4hxStft45X",
+  "tags": []
+}
